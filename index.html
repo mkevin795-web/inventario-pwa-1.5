@@ -130,7 +130,8 @@
     .fab{flex:1;padding:12px;border:none;border-radius:10px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:opacity .15s,transform .1s}
     .fab:active{transform:scale(.97);opacity:.85}
     .fab-p{background:var(--accent);color:#fff}
-    .fab-d{background:rgba(229,57,53,.1);color:var(--danger);border:1px solid rgba(229,57,53,.25)}
+    .fab-s{background:#1a73e8;color:#fff}
+    .fab-d{background:rgba(229,57,53,.1);color:var(--danger);border:1px solid rgba(229,57,53,.25);flex:0 0 52px}
 
     /* Quagga overrides */
     #qreader{width:100%;height:100%;position:absolute;inset:0}
@@ -322,8 +323,9 @@
 </div>
 
 <div class="fab-bar">
-  <button class="fab fab-p" onclick="exportar()">⬇ Exportar Excel</button>
-  <button class="fab fab-d" onclick="limpiarTodo()">🗑 Limpiar</button>
+  <button class="fab fab-s" onclick="enviarSheets()">📊 → Sheets</button>
+  <button class="fab fab-p" onclick="exportar()">⬇ Excel</button>
+  <button class="fab fab-d" onclick="limpiarTodo()">🗑</button>
 </div>
 
 <script>
@@ -538,7 +540,6 @@ function onScanned(code) {
   document.getElementById('scanResult').textContent = c;
   beep(); vib(50);
 
-  // Flash verde
   const modal = document.getElementById('scanModal');
   modal.classList.add('flash');
   setTimeout(() => modal.classList.remove('flash'), 200);
@@ -546,10 +547,9 @@ function onScanned(code) {
   const continuo = document.getElementById('modoContinuo').checked;
 
   if (continuo) {
-    // En modo continuo: agregar y seguir escaneando
+    // Modo continuo: agrega directo y sigue escaneando
     document.getElementById('codigo').value = c;
     agregar(c);
-    // Reiniciar detector para siguiente scan
     setTimeout(() => {
       document.getElementById('scanResult').textContent = '';
       if (nativeDetector && rafId === null) {
@@ -570,10 +570,23 @@ function onScanned(code) {
       }
     }, 800);
   } else {
+    // Modo normal: cierra el scanner, pone el código y espera que el usuario confirme cantidad
     setTimeout(() => {
       cerrarScanner();
       document.getElementById('codigo').value = c;
-      setTimeout(() => agregar(c), 80);
+      // Buscar el producto y mostrarlo en el toast sin agregar aún
+      const p = buscar(c);
+      if (p) {
+        toast(`📦 ${p.articulo} — ajustá cantidad y toca Agregar`,'ok', 3000);
+      } else {
+        toast('❌ Producto no encontrado: ' + c,'err', 3000);
+      }
+      // Enfocar el campo cantidad para que el usuario lo edite fácil
+      setTimeout(() => {
+        const cantEl = document.getElementById('cantidad');
+        cantEl.focus();
+        cantEl.select();
+      }, 150);
     }, 350);
   }
 }
@@ -761,7 +774,30 @@ document.addEventListener('click', e => {
   }
 });
 
-/* ── EXPORTAR ── */
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyrIX9CgBrKeusJPw4oyHzyv1xmaaN5mFGFKl57s8D0JeCsfi5U6DGNgWueKNhv_WuL9Q/exec';
+
+/* ── ENVIAR A GOOGLE SHEETS ── */
+async function enviarSheets() {
+  const items = Object.values(inventario);
+  if (!items.length) { toast('⚠ No hay datos para enviar','warn'); return; }
+  toast('📤 Enviando a Google Sheets…','ok', 5000);
+  try {
+    const res = await fetch(SHEETS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(items)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      vib([30,20,30]);
+      toast(`✅ ${data.filas} productos enviados a Sheets`,'ok', 3500);
+    } else {
+      toast('❌ Error: ' + data.error,'err', 4000);
+    }
+  } catch(err) {
+    toast('❌ Sin conexión o error de red','err', 3500);
+  }
+}
 function exportar() {
   const items = Object.values(inventario);
   if (!items.length) { toast('⚠ No hay datos','warn'); return; }
