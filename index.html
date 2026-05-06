@@ -1221,13 +1221,28 @@ async function enviarSheets() {
   const payload = items.map(i => {
     const codigo = normCod(i.ean || i.dun14 || i.articulo || '');
     const venc = resumenVencimientoCodigo(codigo);
+    const fechaVenc = venc ? venc.fecha : '';
+    const fechaVencIso = venc ? venc.fechaIso : '';
+    const fechaVencSheet = fechaVencIso ? fechaVencIso.replace(/-/g, '/') : '';
+    const fechaVencDateTime = fechaVencIso ? `${fechaVencIso}T00:00:00` : '';
     return {
       ...i,
       codigo_envio: codigo,
-      fecha_vencimiento: venc ? venc.fecha : '',
-      fecha_vencimiento_iso: venc ? venc.fechaIso : '',
+      fecha_vencimiento: fechaVenc,
+      fecha_vencimiento_iso: fechaVencIso,
+      fechaVencimiento: fechaVencIso,
+      FechaVencimiento: fechaVencSheet || fechaVencIso || '',
+      'Fecha Vencimiento': fechaVencSheet || fechaVencIso || '',
+      'fecha vencimiento': fechaVencSheet || fechaVencIso || '',
+      fecha_vencimiento_sheet: fechaVencSheet,
+      fecha_vencimiento_datetime: fechaVencDateTime,
       estado_vencimiento: venc ? venc.estadoTxt : '',
-      lotes_vencimiento: venc ? venc.lotesCount : 0
+      lotes_vencimiento: venc ? venc.lotesCount : 0,
+      // Compatibilidad con Apps Script que usa claves fijas
+      fecha: fechaVencSheet || fechaVencIso || '',
+      Fecha: fechaVencSheet || fechaVencIso || '',
+      vencimiento: fechaVencSheet || fechaVencIso || '',
+      Vencimiento: fechaVencSheet || fechaVencIso || ''
     };
   });
   toast('📤 Enviando a Google Sheets…','ok', 5000);
