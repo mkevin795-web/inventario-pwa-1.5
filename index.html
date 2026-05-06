@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -181,6 +181,33 @@
     .hist-qty{color:var(--accent);font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px;flex-shrink:0}
     .hist-empty{text-align:center;color:var(--muted);padding:14px;font-size:12px}
 
+    /* PROXIMOS A VENCER */
+    .venc-list{padding:4px 12px 10px}
+    .venc-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+    .venc-item:last-child{border-bottom:none}
+    .venc-main{flex:1;min-width:0}
+    .venc-name{font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .venc-sub{color:var(--muted);font-size:10px;font-family:'IBM Plex Mono',monospace}
+    .venc-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+    .venc-tag{font-size:10px;font-weight:600;padding:3px 8px;border-radius:12px;border:1px solid}
+    .venc-tag.ok{color:var(--accent2);border-color:rgba(0,120,212,.25);background:rgba(0,120,212,.08)}
+    .venc-tag.warn{color:var(--warn);border-color:rgba(245,124,0,.28);background:rgba(245,124,0,.1)}
+    .venc-tag.over{color:var(--danger);border-color:rgba(229,57,53,.3);background:rgba(229,57,53,.1)}
+    .btn-venc-clear{background:rgba(245,124,0,.08);border:1px solid rgba(245,124,0,.24);color:var(--warn)}
+    .venc-info{padding:0 12px 8px;color:var(--muted);font-size:11px}
+    .ask-venc{display:flex;align-items:center;gap:8px;padding:2px 0 4px;color:var(--muted);font-size:12px}
+    .ask-venc input{accent-color:var(--accent);width:16px;height:16px}
+
+    /* MODAL VENCIMIENTO OPCIONAL */
+    #vencModal{display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center;padding:12px}
+    #vencModal.open{display:flex}
+    .venc-modal-card{width:100%;max-width:520px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:0 8px 28px rgba(0,0,0,.25)}
+    .venc-modal-title{font-size:13px;font-weight:700;margin-bottom:6px}
+    .venc-modal-sub{font-size:11px;color:var(--muted);margin-bottom:10px}
+    .venc-modal-actions{display:flex;gap:8px;margin-top:10px}
+    .venc-modal-actions .btn-add{padding:12px;font-size:14px}
+    .btn-skip{width:100%;padding:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:10px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:600}
+
     /* BUSCAR PRODUCTO POR NOMBRE */
     .prod-search-w{padding:0 14px 14px}
     .prod-results{background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-top:6px;max-height:180px;overflow-y:auto;display:none}
@@ -233,6 +260,21 @@
   <button class="btn-close-scan" onclick="cerrarScanner()">✕</button>
 </div>
 
+<div id="vencModal">
+  <div class="venc-modal-card">
+    <div class="venc-modal-title">Fecha de vencimiento (opcional)</div>
+    <div class="venc-modal-sub" id="vencModalProducto">Producto</div>
+    <div>
+      <label class="lbl">Fecha de vencimiento</label>
+      <input type="date" id="vencModalFecha">
+    </div>
+    <div class="venc-modal-actions">
+      <button class="btn-add" onclick="guardarVencimientoModal()">Guardar fecha</button>
+      <button class="btn-skip" onclick="cerrarModalVencimiento()">Omitir</button>
+    </div>
+  </div>
+</div>
+
 <div class="main">
 
   <!-- BASE DE DATOS -->
@@ -281,6 +323,11 @@
         </div>
       </div>
 
+      <label class="ask-venc">
+        <input type="checkbox" id="preguntarVencimiento" checked>
+        <span>Pedir fecha de vencimiento despues de agregar (opcional)</span>
+      </label>
+
       <button class="btn-add" onclick="agregar()">＋ Agregar al inventario</button>
     </div>
   </div>
@@ -304,6 +351,18 @@
           <tr><td colspan="5"><div class="empty"><div class="empty-icon">🔍</div>Escanea productos para registrarlos.</div></td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- PROXIMOS A VENCER -->
+  <div class="card">
+    <div class="tbl-hdr">
+      <span class="tbl-title">Proximos a vencer</span>
+      <button class="btn-exp btn-venc-clear" onclick="limpiarVencimientos()">Limpiar</button>
+    </div>
+    <div class="venc-info">Se agregan desde el flujo de escaneo/cantidad y puedes omitir cuando no aplique.</div>
+    <div class="venc-list" id="vencList">
+      <div class="hist-empty">Sin productos cargados.</div>
     </div>
   </div>
 
@@ -341,10 +400,16 @@ let baseDatos = DATOS_EMBEBIDOS.map(r => ({
 }));
 let inventario = {};
 let historial = [];
+let vencimientos = [];
+let vencimientoPendiente = null;
+const LS_KEY = 'inventario_v1';
+const LS_HIST = 'historial_v1';
+const LS_VENC = 'vencimientos_v1';
 
 // Cargar inventario guardado
 cargarLocal();
 renderTabla();
+renderVencimientos();
 renderHistorial();
 
 /* ── AUDIO BEEP ── */
@@ -407,6 +472,7 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
 function agregar(codigoOverride) {
   const codigo = normCod(codigoOverride || document.getElementById('codigo').value);
   const cantidad = parseInt(document.getElementById('cantidad').value) || 1;
+  const preguntarVenc = document.getElementById('preguntarVencimiento')?.checked && !scannerAbierto;
   if (!codigo) { toast('⚠ Ingresa un código','warn'); return; }
   const p = buscar(codigo);
   if (!p) {
@@ -430,6 +496,14 @@ function agregar(codigoOverride) {
   document.getElementById('codigo').value = '';
   document.getElementById('cantidad').value = '1';
   document.getElementById('codigo').focus();
+  if (preguntarVenc) {
+    abrirModalVencimiento({
+      codigo: key,
+      articulo: p.articulo,
+      descripcion: p.descripcion,
+      cantidad
+    });
+  }
 }
 
 document.getElementById('codigo').addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();agregar();} });
@@ -670,24 +744,37 @@ function editarCantidad(k, td) {
 
 /* ── LIMPIAR ── */
 function limpiarTodo() {
-  if (!Object.keys(inventario).length) { toast('⚠ No hay datos que limpiar','warn'); return; }
-  // Confirmación doble toque en lugar de confirm() que puede bloquearse en PWA
+  const sinInventario = !Object.keys(inventario).length;
+  const sinHistorial = !historial.length;
+  const sinVencimientos = !vencimientos.length;
+  if (sinInventario && sinHistorial && sinVencimientos) { toast('No hay datos que limpiar','warn'); return; }
+  // Confirmacion doble toque en lugar de confirm() que puede bloquearse en PWA
   if (!limpiarTodo._pendiente) {
     limpiarTodo._pendiente = true;
-    toast('⚠ Toca Limpiar de nuevo para confirmar','warn', 3000);
+    toast('Toca Limpiar de nuevo para confirmar','warn', 3000);
     setTimeout(() => { limpiarTodo._pendiente = false; }, 3000);
     return;
   }
   limpiarTodo._pendiente = false;
-  inventario = {}; guardarLocal(); historial = []; renderHistorial(); renderTabla(); toast('🗑 Inventario limpiado','warn');
+  inventario = {};
+  historial = [];
+  vencimientos = [];
+  guardarLocal();
+  guardarVencimientos();
+  try { localStorage.removeItem(LS_HIST); } catch(e) {}
+  renderTabla();
+  renderHistorial();
+  renderVencimientos();
+  toast('Inventario limpiado','warn');
 }
 
 /* ── LOCALSTORAGE ── */
-const LS_KEY = 'inventario_v1';
-const LS_HIST = 'historial_v1';
-
 function guardarLocal() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(inventario)); } catch(e) {}
+}
+
+function guardarVencimientos() {
+  try { localStorage.setItem(LS_VENC, JSON.stringify(vencimientos)); } catch(e) {}
 }
 
 function cargarLocal() {
@@ -696,6 +783,8 @@ function cargarLocal() {
     if (d) { inventario = JSON.parse(d); }
     const h = localStorage.getItem(LS_HIST);
     if (h) { historial = JSON.parse(h); }
+    const v = localStorage.getItem(LS_VENC);
+    if (v) { vencimientos = JSON.parse(v); }
   } catch(e) {}
 }
 
@@ -739,7 +828,157 @@ function toggleHistorial() {
   toggle.classList.toggle('open');
 }
 
-/* ── BUSCAR POR NOMBRE ── */
+/* PROXIMOS A VENCER */
+function inicioDia(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function diasParaVencer(fechaIso) {
+  const [y,m,d] = String(fechaIso || '').split('-').map(Number);
+  const hoy = inicioDia(new Date());
+  const v = inicioDia(new Date(y, (m || 1) - 1, d || 1));
+  return Math.round((v - hoy) / 86400000);
+}
+
+function estadoVencimiento(fechaIso) {
+  const dias = diasParaVencer(fechaIso);
+  if (dias < 0) return { cls:'over', txt:`Vencido ${Math.abs(dias)}d` };
+  if (dias === 0) return { cls:'over', txt:'Vence hoy' };
+  if (dias <= 30) return { cls:'warn', txt:`Vence en ${dias}d` };
+  return { cls:'ok', txt:`${dias}d restantes` };
+}
+
+function formatoFecha(fechaIso) {
+  const [y,m,d] = String(fechaIso || '').split('-').map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  if (Number.isNaN(dt.getTime())) return fechaIso || '';
+  return dt.toLocaleDateString('es-CL');
+}
+
+function escHtmlText(s='') {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function hoyIso() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function abrirModalVencimiento(data) {
+  vencimientoPendiente = data;
+  const modal = document.getElementById('vencModal');
+  const sub = document.getElementById('vencModalProducto');
+  const fecha = document.getElementById('vencModalFecha');
+  if (sub) {
+    sub.textContent = `${data.articulo} | ${data.codigo} | ${data.cantidad} uds`;
+  }
+  if (fecha) {
+    fecha.value = hoyIso();
+  }
+  modal?.classList.add('open');
+  fecha?.focus();
+}
+
+function cerrarModalVencimiento() {
+  vencimientoPendiente = null;
+  document.getElementById('vencModal')?.classList.remove('open');
+}
+
+function guardarVencimientoModal() {
+  if (!vencimientoPendiente) { cerrarModalVencimiento(); return; }
+  const fecha = document.getElementById('vencModalFecha')?.value;
+  if (!fecha) { toast('Ingresa una fecha','warn'); return; }
+  registrarVencimiento({
+    codigo: vencimientoPendiente.codigo,
+    articulo: vencimientoPendiente.articulo,
+    descripcion: vencimientoPendiente.descripcion,
+    cantidad: vencimientoPendiente.cantidad,
+    fecha
+  });
+  cerrarModalVencimiento();
+  toast('Fecha de vencimiento guardada','ok');
+}
+
+function registrarVencimiento({ codigo, articulo, descripcion, cantidad, fecha }) {
+  vencimientos.push({
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    codigo: normCod(codigo),
+    cantidad: parseInt(cantidad, 10) || 1,
+    fecha,
+    articulo: articulo || 'Sin registro en base',
+    descripcion: descripcion || ''
+  });
+  guardarVencimientos();
+  renderVencimientos();
+}
+
+function eliminarVencimiento(id) {
+  vencimientos = vencimientos.filter(v => v.id !== id);
+  guardarVencimientos();
+  renderVencimientos();
+}
+
+function limpiarVencimientos() {
+  if (!vencimientos.length) { toast('No hay vencimientos cargados','warn'); return; }
+  if (!limpiarVencimientos._pendiente) {
+    limpiarVencimientos._pendiente = true;
+    toast('Toca Limpiar de nuevo para confirmar','warn', 3000);
+    setTimeout(() => { limpiarVencimientos._pendiente = false; }, 3000);
+    return;
+  }
+  limpiarVencimientos._pendiente = false;
+  vencimientos = [];
+  guardarVencimientos();
+  renderVencimientos();
+  toast('Vencimientos limpiados','warn');
+}
+
+function renderVencimientos() {
+  const list = document.getElementById('vencList');
+  if (!list) return;
+
+  if (!vencimientos.length) {
+    list.innerHTML = '<div class="hist-empty">Sin productos cargados.</div>';
+    return;
+  }
+
+  const ordenados = [...vencimientos].sort((a,b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  list.innerHTML = ordenados.map(v => {
+    const st = estadoVencimiento(v.fecha);
+    const nombre = escHtmlText(v.articulo || 'Producto');
+    const cod = escHtmlText(v.codigo || '');
+    const fechaTxt = escHtmlText(formatoFecha(v.fecha));
+    return `
+      <div class="venc-item">
+        <div class="venc-main">
+          <div class="venc-name">${nombre}</div>
+          <div class="venc-sub">${cod} | ${fechaTxt} | ${v.cantidad} uds</div>
+        </div>
+        <div class="venc-right">
+          <span class="venc-tag ${st.cls}">${st.txt}</span>
+          <button class="btn-del" onclick="eliminarVencimiento('${v.id}')">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+document.getElementById('vencModalFecha')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); guardarVencimientoModal(); }
+});
+document.getElementById('vencModal')?.addEventListener('click', e => {
+  if (e.target && e.target.id === 'vencModal') cerrarModalVencimiento();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') cerrarModalVencimiento();
+});
 function buscarPorNombre(q) {
   const div = document.getElementById('prodResults');
   if (!q || q.length < 2) { div.classList.remove('open'); div.innerHTML=''; return; }
@@ -804,6 +1043,18 @@ function exportar() {
   const rows = items.map(i=>({'EAN':i.ean,'Codigo Articulo':i.articulo,'Descripción':i.descripcion,'Cantidad':i.cantidad}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Inventario');
+  if (vencimientos.length) {
+    const rowsV = [...vencimientos]
+      .sort((a,b) => (a.fecha || '').localeCompare(b.fecha || ''))
+      .map(v => ({
+        'Codigo': v.codigo,
+        'Articulo': v.articulo,
+        'Fecha Vencimiento': formatoFecha(v.fecha),
+        'Cantidad': v.cantidad,
+        'Estado': estadoVencimiento(v.fecha).txt
+      }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rowsV), 'Vencimientos');
+  }
   const d=new Date(), pad=n=>String(n).padStart(2,'0');
   XLSX.writeFile(wb,`inventario_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.xlsx`);
   vib([30,20,30]); toast('✔ Exportado','ok');
@@ -820,3 +1071,4 @@ if ("serviceWorker" in navigator) {
 
 </body>
 </html>
+
