@@ -78,7 +78,7 @@
     .scan-area{padding:8px 12px 10px;display:flex;flex-direction:column;gap:8px}
     .input-row{display:flex;gap:8px;align-items:flex-end}
     label.lbl{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px}
-    input[type=text],input[type=number]{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none}
+    input[type=text],input[type=number],input[type=date]{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none}
     input:focus{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(0,120,212,.12)}
     .qty-w{width:74px}
     .qty-w input{text-align:center}
@@ -195,11 +195,13 @@
     .venc-tag.over{color:var(--danger);border-color:rgba(229,57,53,.3);background:rgba(229,57,53,.1)}
     .btn-venc-clear{background:rgba(245,124,0,.08);border:1px solid rgba(245,124,0,.24);color:var(--warn)}
     .venc-info{padding:0 12px 8px;color:var(--muted);font-size:11px}
+    .venc-manual{padding:0 12px 10px;display:flex;flex-direction:column;gap:8px}
+    .btn-venc-manual{padding:12px;font-size:14px}
     .ask-venc{display:flex;align-items:center;gap:8px;padding:2px 0 4px;color:var(--muted);font-size:12px}
     .ask-venc input{accent-color:var(--accent);width:16px;height:16px}
 
     /* MODAL VENCIMIENTO OPCIONAL */
-    #vencModal{display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center;padding:12px}
+    #vencModal{display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:12px}
     #vencModal.open{display:flex}
     .venc-modal-card{width:100%;max-width:520px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:0 8px 28px rgba(0,0,0,.25)}
     .venc-modal-title{font-size:13px;font-weight:700;margin-bottom:6px}
@@ -360,7 +362,24 @@
       <span class="tbl-title">Proximos a vencer</span>
       <button class="btn-exp btn-venc-clear" onclick="limpiarVencimientos()">Limpiar</button>
     </div>
-    <div class="venc-info">Se agregan desde el flujo de escaneo/cantidad y puedes omitir cuando no aplique.</div>
+    <div class="venc-info">Puedes registrarlos desde el flujo de escaneo o manualmente en este formulario.</div>
+    <div class="venc-manual">
+      <div class="input-row">
+        <div style="flex:1">
+          <label class="lbl">Codigo EAN / DUN14</label>
+          <input type="text" id="vencManualCodigo" placeholder="Escribe codigo" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="qty-w">
+          <label class="lbl">Cant.</label>
+          <input type="number" id="vencManualCantidad" min="1" value="1" inputmode="numeric">
+        </div>
+      </div>
+      <div>
+        <label class="lbl">Fecha de vencimiento</label>
+        <input type="date" id="vencManualFecha">
+      </div>
+      <button class="btn-add btn-venc-manual" onclick="agregarVencimientoManual()">+ Guardar manual</button>
+    </div>
     <div class="venc-list" id="vencList">
       <div class="hist-empty">Sin productos cargados.</div>
     </div>
@@ -411,6 +430,10 @@ cargarLocal();
 renderTabla();
 renderVencimientos();
 renderHistorial();
+const vencManualFechaInput = document.getElementById('vencManualFecha');
+if (vencManualFechaInput && !vencManualFechaInput.value) {
+  vencManualFechaInput.value = hoyIso();
+}
 
 /* ── AUDIO BEEP ── */
 function beep() {
@@ -907,6 +930,33 @@ function guardarVencimientoModal() {
   toast('Fecha de vencimiento guardada','ok');
 }
 
+function agregarVencimientoManual() {
+  const codigo = normCod(document.getElementById('vencManualCodigo')?.value || '');
+  const cantidad = parseInt(document.getElementById('vencManualCantidad')?.value, 10) || 1;
+  const fecha = document.getElementById('vencManualFecha')?.value || '';
+  if (!codigo) { toast('Ingresa un codigo','warn'); return; }
+  if (!fecha) { toast('Ingresa una fecha','warn'); return; }
+  if (cantidad < 1) { toast('Cantidad invalida','warn'); return; }
+
+  const p = buscar(codigo);
+  registrarVencimiento({
+    codigo,
+    articulo: p ? p.articulo : 'Sin registro en base',
+    descripcion: p ? p.descripcion : '',
+    cantidad,
+    fecha
+  });
+
+  const codigoInput = document.getElementById('vencManualCodigo');
+  const cantInput = document.getElementById('vencManualCantidad');
+  const fechaInput = document.getElementById('vencManualFecha');
+  if (codigoInput) codigoInput.value = '';
+  if (cantInput) cantInput.value = '1';
+  if (fechaInput && !fechaInput.value) fechaInput.value = hoyIso();
+  codigoInput?.focus();
+  toast('Vencimiento guardado manualmente','ok');
+}
+
 function registrarVencimiento({ codigo, articulo, descripcion, cantidad, fecha }) {
   vencimientos.push({
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -972,6 +1022,15 @@ function renderVencimientos() {
 
 document.getElementById('vencModalFecha')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); guardarVencimientoModal(); }
+});
+document.getElementById('vencManualCodigo')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); agregarVencimientoManual(); }
+});
+document.getElementById('vencManualCantidad')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); agregarVencimientoManual(); }
+});
+document.getElementById('vencManualFecha')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); agregarVencimientoManual(); }
 });
 document.getElementById('vencModal')?.addEventListener('click', e => {
   if (e.target && e.target.id === 'vencModal') cerrarModalVencimiento();
