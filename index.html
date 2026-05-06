@@ -721,7 +721,7 @@ function renderTabla() {
 
   tb.innerHTML = items.map(([k,i]) => {
     const cod = i.ean || k;
-    const venc = resumenVencimientoCodigo(cod);
+    const venc = resumenVencimientoItem(i, k);
     return `
     <tr>
       <td class="ean">${cod}</td>
@@ -888,6 +888,44 @@ function resumenVencimientoCodigo(codigo) {
     .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
   if (!lotes.length) return null;
 
+  const prox = lotes[0];
+  const st = estadoVencimiento(prox.fecha);
+  return {
+    id: prox.id,
+    fechaIso: prox.fecha,
+    fecha: formatoFecha(prox.fecha),
+    estadoTxt: st.txt,
+    estadoCls: st.cls,
+    lotesCount: lotes.length,
+    extraLotes: lotes.length > 1 ? ` (+${lotes.length - 1})` : ''
+  };
+}
+
+function resumenVencimientoItem(item, key='') {
+  const candidatos = [
+    key,
+    item?.ean,
+    item?.dun14,
+    item?.articulo
+  ]
+    .map(normCod)
+    .filter(Boolean);
+
+  for (const cod of candidatos) {
+    const r = resumenVencimientoCodigo(cod);
+    if (r) return r;
+  }
+
+  if (!candidatos.length) return null;
+  const set = new Set(candidatos);
+  const lotes = vencimientos
+    .filter(v => {
+      const cod = normCod(v.codigo || '');
+      if (!cod || !v.fecha) return false;
+      return set.has(cod);
+    })
+    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  if (!lotes.length) return null;
   const prox = lotes[0];
   const st = estadoVencimiento(prox.fecha);
   return {
@@ -1216,11 +1254,11 @@ const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyrIX9CgBrKeusJPw4oy
 
 /* ── ENVIAR A GOOGLE SHEETS ── */
 async function enviarSheets() {
-  const items = Object.values(inventario);
+  const items = Object.entries(inventario);
   if (!items.length) { toast('⚠ No hay datos para enviar','warn'); return; }
-  const payload = items.map(i => {
-    const codigo = normCod(i.ean || i.dun14 || i.articulo || '');
-    const venc = resumenVencimientoCodigo(codigo);
+  const payload = items.map(([k, i]) => {
+    const codigo = normCod(k || i.ean || i.dun14 || i.articulo || '');
+    const venc = resumenVencimientoItem(i, k);
     const fechaVenc = venc ? venc.fecha : '';
     const fechaVencIso = venc ? venc.fechaIso : '';
     const fechaVencSheet = fechaVencIso ? fechaVencIso.replace(/-/g, '/') : '';
@@ -1245,6 +1283,11 @@ async function enviarSheets() {
       Vencimiento: fechaVencSheet || fechaVencIso || ''
     };
   });
+  const conFecha = payload.filter(p => p.fecha || p.Fecha || p.fecha_vencimiento || p.fecha_vencimiento_iso).length;
+  try { console.log('Payload Sheets', payload); } catch(e) {}
+  if (!conFecha) {
+    toast('⚠ No hay vencimientos vinculados para enviar','warn', 2800);
+  }
   toast('📤 Enviando a Google Sheets…','ok', 5000);
   try {
     const res = await fetch(SHEETS_URL, {
@@ -1255,7 +1298,7 @@ async function enviarSheets() {
     const data = await res.json();
     if (data.ok) {
       vib([30,20,30]);
-      toast(`✅ ${data.filas} productos enviados a Sheets`,'ok', 3500);
+      toast(`✅ ${data.filas} productos enviados (${conFecha} con fecha)`,'ok', 3500);
     } else {
       toast('❌ Error: ' + data.error,'err', 4000);
     }
