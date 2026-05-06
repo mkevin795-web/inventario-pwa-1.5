@@ -119,6 +119,16 @@
     td.ean{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted)}
     td.art{font-weight:600;font-size:12px}
     td.dsc{color:var(--muted);font-size:11px;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    td.vence{min-width:130px}
+    .vence-wrap{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+    .vence-date{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--text)}
+    .vence-edit{background:none;border:0;padding:0;margin:0;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;cursor:pointer;text-align:left}
+    .vence-edit:hover{text-decoration:underline}
+    .vence-none{font-size:11px;color:var(--muted)}
+    .vence-badge{font-size:10px;font-weight:600;padding:2px 6px;border-radius:10px;border:1px solid}
+    .vence-badge.ok{color:var(--accent2);border-color:rgba(0,120,212,.25);background:rgba(0,120,212,.08)}
+    .vence-badge.warn{color:var(--warn);border-color:rgba(245,124,0,.28);background:rgba(245,124,0,.1)}
+    .vence-badge.over{color:var(--danger);border-color:rgba(229,57,53,.3);background:rgba(229,57,53,.1)}
     td.qty{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:var(--accent);text-align:right}
     .btn-del{background:none;border:none;color:var(--danger);font-size:15px;cursor:pointer;padding:3px 6px;border-radius:6px;opacity:.4;transition:opacity .15s}
     .btn-del:active{opacity:1}
@@ -206,6 +216,10 @@
     .venc-modal-card{width:100%;max-width:520px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:0 8px 28px rgba(0,0,0,.25)}
     .venc-modal-title{font-size:13px;font-weight:700;margin-bottom:6px}
     .venc-modal-sub{font-size:11px;color:var(--muted);margin-bottom:10px}
+    .fecha-quick-wrap{position:relative}
+    .fecha-quick-wrap input{padding-right:120px}
+    .fecha-cal-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer}
+    .fecha-hidden-picker{position:absolute;opacity:0;pointer-events:none;width:0;height:0}
     .venc-modal-actions{display:flex;gap:8px;margin-top:10px}
     .venc-modal-actions .btn-add{padding:12px;font-size:14px}
     .btn-skip{width:100%;padding:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:10px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:600}
@@ -264,15 +278,19 @@
 
 <div id="vencModal">
   <div class="venc-modal-card">
-    <div class="venc-modal-title">Fecha de vencimiento (opcional)</div>
+    <div class="venc-modal-title" id="vencModalTitle">Fecha de vencimiento (opcional)</div>
     <div class="venc-modal-sub" id="vencModalProducto">Producto</div>
     <div>
       <label class="lbl">Fecha de vencimiento</label>
-      <input type="date" id="vencModalFecha">
+      <div class="fecha-quick-wrap">
+        <input type="text" id="vencModalFechaManual" placeholder="dd/mm/aaaa o ddmmaaaa" inputmode="numeric" autocomplete="off">
+        <button type="button" class="fecha-cal-btn" onclick="abrirCalendarioVencModal()">Calendario</button>
+        <input type="date" id="vencModalFechaPicker" class="fecha-hidden-picker">
+      </div>
     </div>
     <div class="venc-modal-actions">
-      <button class="btn-add" onclick="guardarVencimientoModal()">Guardar fecha</button>
-      <button class="btn-skip" onclick="cerrarModalVencimiento()">Omitir</button>
+      <button class="btn-add" id="vencModalGuardarBtn" onclick="guardarVencimientoModal()">Guardar fecha</button>
+      <button class="btn-skip" id="vencModalCancelarBtn" onclick="cerrarModalVencimiento()">Omitir</button>
     </div>
   </div>
 </div>
@@ -347,41 +365,12 @@
     <div class="tbl-w">
       <table>
         <thead>
-          <tr><th>EAN</th><th>Artículo</th><th>Desc.</th><th style="text-align:right">Cant.</th><th></th></tr>
+          <tr><th>EAN</th><th>Artículo</th><th>Desc.</th><th>Vence</th><th style="text-align:right">Cant.</th><th></th></tr>
         </thead>
         <tbody id="tabla">
-          <tr><td colspan="5"><div class="empty"><div class="empty-icon">🔍</div>Escanea productos para registrarlos.</div></td></tr>
+          <tr><td colspan="6"><div class="empty"><div class="empty-icon">🔍</div>Escanea productos para registrarlos.</div></td></tr>
         </tbody>
       </table>
-    </div>
-  </div>
-
-  <!-- PROXIMOS A VENCER -->
-  <div class="card">
-    <div class="tbl-hdr">
-      <span class="tbl-title">Proximos a vencer</span>
-      <button class="btn-exp btn-venc-clear" onclick="limpiarVencimientos()">Limpiar</button>
-    </div>
-    <div class="venc-info">Puedes registrarlos desde el flujo de escaneo o manualmente en este formulario.</div>
-    <div class="venc-manual">
-      <div class="input-row">
-        <div style="flex:1">
-          <label class="lbl">Codigo EAN / DUN14</label>
-          <input type="text" id="vencManualCodigo" placeholder="Escribe codigo" inputmode="numeric" autocomplete="off">
-        </div>
-        <div class="qty-w">
-          <label class="lbl">Cant.</label>
-          <input type="number" id="vencManualCantidad" min="1" value="1" inputmode="numeric">
-        </div>
-      </div>
-      <div>
-        <label class="lbl">Fecha de vencimiento</label>
-        <input type="date" id="vencManualFecha">
-      </div>
-      <button class="btn-add btn-venc-manual" onclick="agregarVencimientoManual()">+ Guardar manual</button>
-    </div>
-    <div class="venc-list" id="vencList">
-      <div class="hist-empty">Sin productos cargados.</div>
     </div>
   </div>
 
@@ -421,6 +410,7 @@ let inventario = {};
 let historial = [];
 let vencimientos = [];
 let vencimientoPendiente = null;
+let modoVencModal = 'add';
 const LS_KEY = 'inventario_v1';
 const LS_HIST = 'historial_v1';
 const LS_VENC = 'vencimientos_v1';
@@ -716,7 +706,7 @@ function renderTabla() {
   }
 
   if (!Object.keys(inventario).length) {
-    tb.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="empty-icon">🔍</div>Escanea productos para registrarlos.</div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">🔍</div>Escanea productos para registrarlos.</div></td></tr>';
     document.getElementById('badge').textContent = '0 items';
     return;
   }
@@ -725,18 +715,30 @@ function renderTabla() {
   document.getElementById('badge').textContent = `${Object.keys(inventario).length} SKU · ${totalU} uds`;
 
   if (!items.length) {
-    tb.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="empty-icon">🔎</div>Sin resultados para esa búsqueda.</div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">🔎</div>Sin resultados para esa búsqueda.</div></td></tr>';
     return;
   }
 
-  tb.innerHTML = items.map(([k,i])=>`
+  tb.innerHTML = items.map(([k,i]) => {
+    const cod = i.ean || k;
+    const venc = resumenVencimientoCodigo(cod);
+    return `
     <tr>
-      <td class="ean">${i.ean||k}</td>
+      <td class="ean">${cod}</td>
       <td class="art">${i.articulo}</td>
       <td class="dsc">${i.descripcion}</td>
+      <td class="vence">
+        ${venc ? `
+          <div class="vence-wrap">
+            <button class="vence-edit" onclick="abrirEdicionVencimiento('${venc.id}')">${venc.fecha}${venc.extraLotes}</button>
+            <span class="vence-badge ${venc.estadoCls}">${venc.estadoTxt}</span>
+          </div>
+        ` : '<span class="vence-none">—</span>'}
+      </td>
       <td class="qty" onclick="editarCantidad('${k}',this)" title="Toca para editar">${i.cantidad}</td>
       <td><button class="btn-del" onclick="eliminar('${k}')">✕</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 /* ── ELIMINAR ── */
@@ -878,6 +880,25 @@ function formatoFecha(fechaIso) {
   return dt.toLocaleDateString('es-CL');
 }
 
+function resumenVencimientoCodigo(codigo) {
+  const cod = normCod(codigo || '');
+  if (!cod) return null;
+  const lotes = vencimientos
+    .filter(v => normCod(v.codigo || '') === cod && v.fecha)
+    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  if (!lotes.length) return null;
+
+  const prox = lotes[0];
+  const st = estadoVencimiento(prox.fecha);
+  return {
+    id: prox.id,
+    fecha: formatoFecha(prox.fecha),
+    estadoTxt: st.txt,
+    estadoCls: st.cls,
+    extraLotes: lotes.length > 1 ? ` (+${lotes.length - 1})` : ''
+  };
+}
+
 function escHtmlText(s='') {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -895,30 +916,133 @@ function hoyIso() {
   return `${y}-${m}-${d}`;
 }
 
+function fechaValida(y, m, d) {
+  const yy = Number(y), mm = Number(m), dd = Number(d);
+  const dt = new Date(yy, mm - 1, dd);
+  return dt.getFullYear() === yy && (dt.getMonth() + 1) === mm && dt.getDate() === dd;
+}
+
+function isoToManual(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+function manualToIso(txt) {
+  const s = String(txt || '').trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m && fechaValida(m[1], m[2], m[3])) return `${m[1]}-${m[2]}-${m[3]}`;
+
+  m = s.match(/^(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})$/);
+  if (m && fechaValida(m[3], m[2], m[1])) return `${m[3]}-${m[2]}-${m[1]}`;
+
+  m = s.match(/^(\d{8})$/); // ddmmaaaa
+  if (m) {
+    const d = m[1].slice(0,2), mo = m[1].slice(2,4), y = m[1].slice(4,8);
+    if (fechaValida(y, mo, d)) return `${y}-${mo}-${d}`;
+  }
+  return '';
+}
+
+function setFechaModal(iso) {
+  const fecha = document.getElementById('vencModalFechaPicker');
+  const manual = document.getElementById('vencModalFechaManual');
+  if (fecha) fecha.value = iso || '';
+  if (manual) manual.value = isoToManual(iso || '');
+}
+
+function obtenerFechaModalIso() {
+  const fecha = document.getElementById('vencModalFechaPicker');
+  const manual = document.getElementById('vencModalFechaManual');
+  const manualRaw = manual?.value?.trim() || '';
+  if (manualRaw) {
+    const iso = manualToIso(manualRaw);
+    if (!iso) return '';
+    setFechaModal(iso);
+    return iso;
+  }
+  const iso = fecha?.value || '';
+  if (iso) setFechaModal(iso);
+  return iso;
+}
+
+function abrirCalendarioVencModal() {
+  const picker = document.getElementById('vencModalFechaPicker');
+  if (!picker) return;
+  const isoActual = obtenerFechaModalIso() || picker.value || hoyIso();
+  picker.value = isoActual;
+  if (typeof picker.showPicker === 'function') {
+    picker.showPicker();
+  } else {
+    picker.focus();
+    picker.click();
+  }
+}
+
 function abrirModalVencimiento(data) {
+  modoVencModal = 'add';
   vencimientoPendiente = data;
   const modal = document.getElementById('vencModal');
+  const title = document.getElementById('vencModalTitle');
   const sub = document.getElementById('vencModalProducto');
-  const fecha = document.getElementById('vencModalFecha');
+  const fecha = document.getElementById('vencModalFechaPicker');
+  const fechaManual = document.getElementById('vencModalFechaManual');
+  const btnGuardar = document.getElementById('vencModalGuardarBtn');
+  const btnCancelar = document.getElementById('vencModalCancelarBtn');
+  if (title) title.textContent = 'Fecha de vencimiento (opcional)';
   if (sub) {
     sub.textContent = `${data.articulo} | ${data.codigo} | ${data.cantidad} uds`;
   }
-  if (fecha) {
-    fecha.value = hoyIso();
-  }
+  if (btnGuardar) btnGuardar.textContent = 'Guardar fecha';
+  if (btnCancelar) btnCancelar.textContent = 'Omitir';
+  setFechaModal(hoyIso());
   modal?.classList.add('open');
-  fecha?.focus();
+  (fechaManual || fecha)?.focus();
+}
+
+function abrirEdicionVencimiento(id) {
+  const reg = vencimientos.find(v => v.id === id);
+  if (!reg) { toast('No se encontro el vencimiento','warn'); return; }
+  modoVencModal = 'edit';
+  vencimientoPendiente = { ...reg };
+  const modal = document.getElementById('vencModal');
+  const title = document.getElementById('vencModalTitle');
+  const sub = document.getElementById('vencModalProducto');
+  const fecha = document.getElementById('vencModalFechaPicker');
+  const fechaManual = document.getElementById('vencModalFechaManual');
+  const btnGuardar = document.getElementById('vencModalGuardarBtn');
+  const btnCancelar = document.getElementById('vencModalCancelarBtn');
+  if (title) title.textContent = 'Editar fecha de vencimiento';
+  if (sub) sub.textContent = `${reg.articulo} | ${reg.codigo} | ${reg.cantidad} uds`;
+  if (btnGuardar) btnGuardar.textContent = 'Guardar cambios';
+  if (btnCancelar) btnCancelar.textContent = 'Cancelar';
+  setFechaModal(reg.fecha || hoyIso());
+  modal?.classList.add('open');
+  (fechaManual || fecha)?.focus();
 }
 
 function cerrarModalVencimiento() {
+  modoVencModal = 'add';
   vencimientoPendiente = null;
   document.getElementById('vencModal')?.classList.remove('open');
 }
 
 function guardarVencimientoModal() {
   if (!vencimientoPendiente) { cerrarModalVencimiento(); return; }
-  const fecha = document.getElementById('vencModalFecha')?.value;
-  if (!fecha) { toast('Ingresa una fecha','warn'); return; }
+  const fecha = obtenerFechaModalIso();
+  if (!fecha) { toast('Fecha invalida (usa dd/mm/aaaa)','warn'); return; }
+  if (modoVencModal === 'edit') {
+    const idx = vencimientos.findIndex(v => v.id === vencimientoPendiente.id);
+    if (idx === -1) { toast('No se encontro el vencimiento','warn'); cerrarModalVencimiento(); return; }
+    vencimientos[idx].fecha = fecha;
+    guardarVencimientos();
+    renderVencimientos();
+    renderTabla();
+    cerrarModalVencimiento();
+    toast('Fecha de vencimiento actualizada','ok');
+    return;
+  }
   registrarVencimiento({
     codigo: vencimientoPendiente.codigo,
     articulo: vencimientoPendiente.articulo,
@@ -968,6 +1092,7 @@ function registrarVencimiento({ codigo, articulo, descripcion, cantidad, fecha }
   });
   guardarVencimientos();
   renderVencimientos();
+  renderTabla();
 }
 
 function eliminarVencimiento(id) {
@@ -1020,8 +1145,21 @@ function renderVencimientos() {
   }).join('');
 }
 
-document.getElementById('vencModalFecha')?.addEventListener('keydown', e => {
+document.getElementById('vencModalFechaPicker')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); guardarVencimientoModal(); }
+});
+document.getElementById('vencModalFechaPicker')?.addEventListener('change', e => {
+  const iso = e.target?.value || '';
+  if (iso) setFechaModal(iso);
+});
+document.getElementById('vencModalFechaManual')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); guardarVencimientoModal(); }
+});
+document.getElementById('vencModalFechaManual')?.addEventListener('blur', e => {
+  const txt = e.target?.value || '';
+  if (!txt.trim()) return;
+  const iso = manualToIso(txt);
+  if (iso) setFechaModal(iso);
 });
 document.getElementById('vencManualCodigo')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); agregarVencimientoManual(); }
